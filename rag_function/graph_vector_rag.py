@@ -13,11 +13,11 @@ FAISS_PATH = os.path.join(
     "raptor_index_v1"
 )
 MODEL = "gemini-2.5-flash-lite"
-GENAI_API_KEY = "AIzaSyAWCxPmMaTE_U2LVAHgx5TU2cgCixHz90g"
+GENAI_API_KEY = "<your_gemini_key>"
 
-NEO4J_URI = "bolt://localhost:7687"
+NEO4J_URI = "localhost"
 NEO4J_USER = "neo4j"
-NEO4J_PASS = "Goppanmavane@2"
+NEO4J_PASS = "password"
 
 # ---------------- INIT ----------------
 embedding_model = HuggingFaceEmbeddings(
