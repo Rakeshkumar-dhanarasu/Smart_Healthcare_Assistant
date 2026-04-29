@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Baymax - Healthcare Companion</title>
+
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: radial-gradient(circle at top, #e0f2fe, #ffffff 60%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    }
+    .container {
+        width: 100%;
+        max-width: 850px;
+        height: 680px;
+        background: white;
+        border-radius: 32px;
+        box-shadow: 0 30px 60px rgba(56, 189, 248, 0.25);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 3px solid #e0f2fe;
+    }
+    .header {
+        background: linear-gradient(90deg, #ffffff, #e0f2fe);
+        padding: 22px 30px;
+        text-align: center;
+        border-bottom: 2px solid #bae6fd;
+        position: relative;
+    }
+    .status-indicator {
+        position: absolute;
+        top: 24px;
+        right: 26px;
+        width: 14px;
+        height: 14px;
+        background: #38bdf8;
+        border-radius: 50%;
+        border: 2px solid white;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.3); opacity: 0.6; }
+    }
+    .header-text h1 { color: #b91c1c; font-size: 26px; font-weight: 800; }
+    .header-text p { color: #334155; font-size: 14px; margin-top: 4px; }
+
+    .chat-area {
+        flex: 1;
+        padding: 24px;
+        overflow-y: auto;
+        background: linear-gradient(#ffffff, #f0f9ff);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .message { display: flex; margin-bottom: 10px; animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .message.user { justify-content: flex-end; }
+    .message.baymax { justify-content: flex-start; }
+
+    .message-bubble {
+        max-width: 70%;
+        padding: 16px 20px;
+        border-radius: 24px;
+        line-height: 1.5;
+        word-wrap: break-word;
+        font-size: 15px;
+    }
+    .message.user .message-bubble {
+        background: #dc2626;
+        color: white;
+        border-bottom-right-radius: 6px;
+    }
+    .message.baymax .message-bubble {
+        background: #e0f2fe;
+        color: #0f172a;
+        border-bottom-left-radius: 6px;
+    }
+
+    .typing-indicator {
+        display: none;
+        padding: 16px 20px;
+        background: #e0f2fe;
+        border-radius: 24px;
+        border-bottom-left-radius: 6px;
+        max-width: 70px;
+    }
+    .typing-indicator.active { display: block; }
+    .typing-dots { display: flex; gap: 5px; }
+    .typing-dots span {
+        width: 8px; height: 8px;
+        background: #38bdf8;
+        border-radius: 50%;
+        animation: typing 1.4s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-10px); }
+    }
+
+    .input-section {
+        padding: 18px;
+        background: white;
+        border-top: 2px solid #bae6fd;
+        display: flex;
+        gap: 12px;
+    }
+    .chat-input {
+        flex: 1;
+        padding: 14px 18px;
+        border: 2px solid #bae6fd;
+        border-radius: 999px;
+        font-size: 15px;
+        outline: none;
+        transition: all 0.3s ease;
+        font-family: inherit;
+    }
+    .chat-input:focus {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+    }
+    .send-btn, .voice-btn {
+        padding: 14px 22px;
+        background: #dc2626;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+    .send-btn:hover, .voice-btn:hover {
+        background: #b91c1c;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
+    }
+    .voice-btn.listening {
+        background: #991b1b;
+        animation: micPulse 1.2s infinite;
+    }
+    @keyframes micPulse {
+        0% { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); }
+        70% { box-shadow: 0 0 0 18px rgba(220,38,38,0); }
+        100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+    }
+
+    .reminder-section {
+        background: #f0f9ff;
+        padding: 18px;
+        border-top: 2px solid #bae6fd;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .reminder-section label {
+        color: #334155;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .reminder-section input {
+        padding: 10px 14px;
+        border: 2px solid #bae6fd;
+        border-radius: 12px;
+        font-size: 14px;
+        width: 120px;
+        outline: none;
+        transition: all 0.3s ease;
+    }
+    .reminder-section input:focus {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+    }
+    .reminder-btn {
+        padding: 10px 24px;
+        background: #1d4ed8;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+    }
+    .reminder-btn:hover {
+        background: #1e40af;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(29, 78, 216, 0.4);
+    }
+    .reminder-btn:active { transform: translateY(0); }
+
+    .welcome-message {
+        text-align: center;
+        color: #64748b;
+        padding: 40px 20px;
+        font-size: 15px;
+    }
+    .welcome-message h2 { color: #334155; margin-bottom: 10px; font-size: 20px; }
+
+</style>
+</head>
+
+<body>
+<div class="container">
+    <div class="header">
+        <div class="status-indicator"></div>
+        <div class="header-text">
+            <h1>Baymax</h1>
+            <p>Your Personal Healthcare Companion</p>
+        </div>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+        <div class="welcome-message">
+            <h2>Hello. I am Baymax.</h2>
+            <p>I am here to help improve your health. Please describe your symptoms.</p>
+        </div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">
+        <div class="typing-dots">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <div class="input-section">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Describe how you're feeling...">
+        <button class="send-btn" onclick="sendMessage()">Send</button>
+        <button class="voice-btn" onclick="openImageUpload()">📷</button>
+    </div>
+
+    <div class="reminder-section">
+        <label for="reminderTime">Reminder in (minutes):</label>
+        <input type="number" id="reminderTime" placeholder="Minutes" min="1" max="1440">
+        <button class="reminder-btn" onclick="setReminder()">Set Reminder</button>
+    </div>
+</div>
+
+<script>
+const chatArea = document.getElementById('chatArea');
+const chatInput = document.getElementById('chatInput');
+const typingIndicator = document.getElementById('typingIndicator');
+const reminderTimeInput = document.getElementById('reminderTime');
+
+const BACKEND_URL = "http://localhost:8000/chat";
+const SESSION_ID = "baymax-session-1";
+
+let careSatisfied = false;
+let careMode = false;
+let recognition;
+let isListening = false;
+let voiceMessageSent = false;
+let finalTranscript = "";
+
+
+let patientProfile = { name: null, age: null, gender: null, allergies: null, region: null };
+let careStep = 0;
+let lastRemedy = null;
+
+const positiveMessages = [
+    "You are doing your best, and that is enough.",
+    "Please remember to be gentle with yourself.",
+    "You took a meaningful step by caring for yourself.",
+    "Your well-being matters. Take a calm breath.",
+    "Healing takes time. You are not alone.",
+    "I am proud of you for prioritizing your health."
+];
+
+chatInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
+
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    addMessage(message, 'user');
+    chatInput.value = '';
+
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("satisfied with my care") || normalized.includes("i am satisfied") || normalized.includes("i'm satisfied with my care")) {
+        careSatisfied = true;
+        const name = patientProfile.name ? patientProfile.name : "friend";
+        const remedyReminder = lastRemedy
+    ? `Remember to follow your remedy: ${lastRemedy}`
+    : "Take care of yourself today.";
+
+        await baymaxReply(`I am glad you feel supported, ${name}. You took care of yourself today. ${remedyReminder}`);
+        await baymaxReply("If you would like, you may set a reminder and I will gently check in on you later.");
+        return;
+    }
+
+    if (normalized.includes("i require care") || normalized.includes("i need care") || normalized.includes("i want care")) {
+        careMode = true;
+        careStep = 1;
+        await baymaxReply("I understand. Let's get some details first. What is your name?");
+        return;
+    }
+
+    if (careMode && careStep > 0 && careStep <= 6) {
+        handleCareQuestions(message);
+        return;
+    }
+
+    await baymaxReply("Processing...");
+    try {
+        const response = await fetch(BACKEND_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: SESSION_ID, message: message })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            await baymaxReply("Sorry, I couldn't process that right now.");
+            return;
+        }
+        await baymaxReply(data.reply);
+    } catch {
+        await baymaxReply("Connection error. Please check your backend server.");
+    }
+}
+
+const imageInput = document.getElementById("imageInput");
+
+function openImageUpload() {
+    imageInput.click();
+}
+
+imageInput.addEventListener("change", async function () {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    addMessage("📷 Image uploaded", "user");
+
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("session_id", SESSION_ID);
+
+    await baymaxReply("Processing image...");
+
+    try {
+        const response = await fetch("http://localhost:8000/image-upload", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            await baymaxReply("Sorry, I couldn't process that image.");
+            return;
+        }
+
+        await baymaxReply(data.reply);
+
+    } catch (error) {
+        await baymaxReply("Connection error while uploading image.");
+    }
+
+    imageInput.value = "";
+});
+
+async function baymaxReply(text) {
+    typingIndicator.classList.add('active');
+    chatArea.appendChild(typingIndicator);
+    scrollToBottom();
+    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 500));
+    typingIndicator.classList.remove('active');
+    addMessage(text, 'baymax');
+}
+
+function handleCareQuestions(answer) {
+    if (careStep === 1) { patientProfile.name = answer; careStep = 2; baymaxReply("How old are you?"); }
+    else if (careStep === 2) { patientProfile.age = answer; careStep = 3; baymaxReply("What is your gender?"); }
+    else if (careStep === 3) { patientProfile.gender = answer; careStep = 4; baymaxReply("Do you have any allergies? If none, type 'none'."); }
+    else if (careStep === 4) { patientProfile.allergies = answer; careStep = 5; baymaxReply("Which region are you in?"); }
+    else if (careStep === 5) { patientProfile.region = answer; careStep = 6; baymaxReply("Thank you. What is your ailment or symptom?"); }
+    else if (careStep === 6) {
+    careStep = 7;
+    careMode = false;
+
+    baymaxReply("Let me think about a gentle remedy for you...");
+    fetchGeminiRemedy(answer).then(remedy => {
+        lastRemedy = remedy;
+        baymaxReply(remedy);
+    });
+}
+
+const imageInput = document.getElementById("imageInput");
+
+function openImageUpload() {
+    imageInput.click();
+}
+
+imageInput.addEventListener("change", async function () {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    addMessage("📷 Image uploaded", "user");
+
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("session_id", SESSION_ID);
+
+    await baymaxReply("Processing image...");
+
+    try {
+        const response = await fetch("http://localhost:8000/image-upload", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            await baymaxReply("Sorry, I couldn't process that image.");
+            return;
+        }
+
+        await baymaxReply(data.reply);
+
+    } catch (error) {
+        await baymaxReply("Connection error while uploading image.");
+    }
+
+    imageInput.value = "";
+});
+
+}
+
+async function fetchGeminiRemedy(symptom) {
+    try {
+        const response = await fetch("http://localhost:8000/care-remedy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                profile: patientProfile,
+                symptom: symptom
+            })
+        });
+
+        const data = await response.json();
+        return data.remedy;
+    } catch {
+        return "I recommend rest, hydration, and gentle self-care.";
+    }
+}
+
+
+
+
+function addMessage(text, sender) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}`;
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'message-bubble';
+    bubbleDiv.textContent = text;
+    messageDiv.appendChild(bubbleDiv);
+    chatArea.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
+
+function setReminder() {
+    const minutes = parseInt(reminderTimeInput.value);
+    if (!minutes || minutes < 1) { alert('Please enter a valid number of minutes.'); return; }
+    const name = patientProfile.name ? patientProfile.name : "friend";
+    const remedyReminder = lastRemedy
+    ? `Also, remember to follow your remedy: ${lastRemedy}`
+    : "";
+
+    const bodyText = careSatisfied ? `${name}, ${positiveMessages[Math.floor(Math.random() * positiveMessages.length)]} ${remedyReminder}` : `${name}, ${remedyReminder}`;
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                setTimeout(() => { new Notification('Baymax Reminder', { body: bodyText }); }, minutes * 60000);
+            }
+        });
+    }
+    addMessage(`I have scheduled a reminder for ${minutes} minute${minutes > 1 ? 's' : ''} from now.`, 'baymax');
+    reminderTimeInput.value = '';
+}
+
+setTimeout(() => {
+    const welcomeMsg = document.querySelector('.welcome-message');
+    if (welcomeMsg) welcomeMsg.remove();
+    addMessage("Hello. I am Baymax, your personal healthcare companion.", 'baymax');
+}, 500);
+</script>
+</body>
+</html>
