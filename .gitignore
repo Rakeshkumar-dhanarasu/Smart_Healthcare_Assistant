@@ -1,0 +1,4 @@
+.env
+env/
+**/medical_ocr_v5_model/
+datasets/
