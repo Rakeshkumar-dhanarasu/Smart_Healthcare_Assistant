@@ -1,18 +1,19 @@
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS 
 from google import genai
 from neo4j import GraphDatabase
 
-
 import os
 from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------- CONFIG ----------------
 FAISS_PATH = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
     "datasets",
-    "vector_database",
-    "raptor_index_v1"
+    "vector_db",
+    "information_enricher_db"
 )
 MODEL = "gemini-2.5-flash-lite"
 GENAI_API_KEY = os.getenv("GENAI_API_KEY")
@@ -39,21 +40,69 @@ driver = GraphDatabase.driver(
     auth=(NEO4J_USER, NEO4J_PASS)
 )
 
+# ---------------- CYPHER GENERATOR (DYNAMIC) ----------------
+with open("../prompts/graph_retrieval.txt", "r") as file:
+    content = file.read()
+
+def generate_cypher(query):
+    prompt = content + query
+    
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt
+    )
+    
+    return response.text.strip()
+
+# ---------------- CYPHER PASSER ----------------
+def run_cypher(cypher):
+    with driver.session() as session:
+        result = session.run(cypher)
+        return [record.data() for record in result]
+
+# ---------------- GRAPH RETRIEVAL (DYNAMIC) ----------------
+def graph_retrieve_dynamic(user_query):
+
+    cypher = generate_cypher(user_query)
+
+    try:
+        results = run_cypher(cypher)
+
+        extracted = []
+        for r in results:
+            for value in r.values():
+                if isinstance(value, str):
+                    extracted.append(value)
+
+        return list(set(extracted))
+
+    except Exception as e:
+        print("❌ Graph Error:", e)
+        return []
+
+
 # ---------------- STEP-BACK ----------------
-def generate_stepback_questions(query):
+with open("../prompts/stepback_questioner.txt", "r") as file:
+    content2 = file.read()
+
+def generate_stepback_questions(query, graph_nodes):
+
+    nodes_text = ", ".join(graph_nodes)
 
     prompt = f"""
-Break the query into 3-5 smaller questions.
+        Related entities: {nodes_text}
 
-Focus:
-- symptoms
-- herbs
-- nutrients
-- causes
+        Focus:
+        - symptoms
+        - herbs
+        - nutrients
+        - usage
 
-Query:
-{query}
-"""
+        Query:
+        {query}
+    """
+
+    prompt = content2 + prompt    
 
     res = client.models.generate_content(
         model=MODEL,
@@ -63,24 +112,10 @@ Query:
     return [q.strip() for q in res.text.split("\n") if q.strip()]
 
 
-# ---------------- GRAPH RETRIEVAL ----------------
-def graph_retrieve(tx, user_query):
-
-    cypher = """
-    MATCH (h:FoodnHerb)-[:HELPS_WITH]->(s:Symptom)
-    WHERE toLower(s.name) CONTAINS toLower($q)
-    RETURN DISTINCT h.name LIMIT 10
-    """
-
-    result = tx.run(cypher, q=user_query)
-
-    return [r["h.name"] for r in result]
-
-
 # ---------------- VECTOR RETRIEVAL ----------------
 def vector_retrieve(query):
 
-    docs = db.max_marginal_relevance_search(query, k=5)
+    docs = db.max_marginal_relevance_search(query, k=4)
 
     return [
         {
@@ -92,75 +127,72 @@ def vector_retrieve(query):
     ]
 
 
-# ---------------- SCORING ----------------
-def score_results(graph_results, vector_docs):
+# ---------------- SUB-QUESTION ANSWERING ----------------
+def answer_subquestion(question, docs):
 
-    scores = {}
+    context = "\n\n".join([d["text"][:300] for d in docs])
 
-    for herb in graph_results:
-        scores[herb] = scores.get(herb, 0) + 3
+    prompt = f"""
+Answer the question using the given context.
 
-    for doc in vector_docs:
-        entity = doc["entity"]
-        if entity:
-            scores[entity] = scores.get(entity, 0) + 1
+Rules:
+- Focus only on helpful remedies
+- Keep it short (3-4 lines)
+- No diagnosis
 
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+Context:
+{context}
 
-    return ranked
-
-
-# ---------------- CONTEXT BUILD ----------------
-def build_context(stepback_qs, graph_data, vector_data):
-
-    return f"""
-STEP-BACK:
-{stepback_qs}
-
-GRAPH:
-{graph_data}
-
-VECTOR:
-{[v['text'][:200] for v in vector_data]}
+Question:
+{question}
 """
 
-# ---------------- FINAL ANSWER ----------------
-def generate_answer(query, context):
+    res = client.models.generate_content(
+        model=MODEL,
+        contents=prompt
+    )
+
+    return res.text.strip()
+
+
+# ---------------- FINAL SUMMARIZATION ----------------
+def summarize_answers(query, sub_answers):
+
+    combined = "\n\n".join(sub_answers)
 
     prompt = f"""
 You are a helpful health assistant.
 
-STRICT RULES (MUST FOLLOW):
-1. DO NOT diagnose any disease under any circumstances.
-2. DO NOT mention or infer the root cause of symptoms.
-3. ONLY provide supportive care and natural remedies.
-4. ALWAYS structure the response in clean, readable format.
-5. DO NOT use asterisks (*), emojis, or markdown symbols.
-6. ALWAYS use numbered lists where applicable.
+STRICT RULES:
+1. DO NOT diagnose diseases
+2. DO NOT mention causes
+3. ONLY give natural remedies
+4. Use clean numbered format
+5. No markdown or symbols
 
-OUTPUT FORMAT (STRICT):
+Structure:
+
 Response:
-<Short 1-2 line summary>
+<Short summary>
 
 Suggested Remedies:
-1. Remedy one
-2. Remedy two
-3. Remedy three
+1. ...
+2. ...
 
 Precautions:
-1. Precaution one
-2. Precaution two
+1. ...
+2. ...
 
 Important Note:
 This is not a medical diagnosis. Consult a healthcare professional if symptoms persist.
 
 ---
 
-Context:
-{context}
-
-Query:
+User Query:
 {query}
+
+Collected Insights:
+{combined}
 """
 
     res = client.models.generate_content(
@@ -171,38 +203,56 @@ Query:
     return res.text
 
 
-# ================= MAIN FUNCTION =================
-def get_answer(query):
+# ---------------- MAIN HYBRID RAG ----------------
+def hybrid_rag(query):
 
-    # Step 1: Step-back
-    stepback_qs = generate_stepback_questions(query)
+    print("\n🔍 USER QUERY:", query)
 
-    all_graph = []
-    all_vector = []
+    # Step 1: Graph Retrieval
+    graph_nodes = graph_retrieve_dynamic(query)
+    print("\n📊 GRAPH NODES:", graph_nodes)
 
-    # Step 2: Retrieve for each sub-question
-    with driver.session() as session:
-        for q in stepback_qs:
+    # Step 2: Step-back
+    stepback_qs = generate_stepback_questions(query, graph_nodes)
+    print("\n🧠 STEP-BACK QUESTIONS:")
+    for q in stepback_qs:
+        print("-", q)
 
-            g = session.execute_read(graph_retrieve, q)
-            v = vector_retrieve(q)
+    all_answers = []
+    entity_scores = {}
 
-            all_graph.extend(g)
-            all_vector.extend(v)
+    # Step 3: Process each question
+    for q in stepback_qs:
 
-    # Step 3: Deduplicate
-    all_graph = list(set(all_graph))
+        docs = vector_retrieve(q)
 
-    # Step 4: Rank
-    ranked = score_results(all_graph, all_vector)
+        # Track entity scores
+        for d in docs:
+            if d["entity"]:
+                entity_scores[d["entity"]] = entity_scores.get(d["entity"], 0) + 1
 
-    # Step 5: Build context
-    context = build_context(stepback_qs, ranked[:5], all_vector[:5])
+        # Answer sub-question
+        ans = answer_subquestion(q, docs)
 
-    # Step 6: Final answer
-    answer = generate_answer(query, context)
+        print(f"\n➡️ {q}\n{ans}")
+
+        all_answers.append(ans)
+
+    # Step 4: Final summary
+    final_answer = summarize_answers(query, all_answers)
+
+    ranked_entities = sorted(entity_scores.items(), key=lambda x: x[1], reverse=True)
 
     return {
-        "answer": answer,
-        "ranked_entities": ranked[:5]
+        "answer": final_answer,
+        "graph_nodes": graph_nodes,
+        "ranked_entities": ranked_entities[:5]
     }
+
+
+# ---------------- TEST ----------------
+if __name__ == "__main__":
+    result = hybrid_rag("What are the medical benefits of Tulsi")
+
+    print("\n🧾 FINAL ANSWER:\n", result["answer"])
+    print("\n🏆 TOP ENTITIES:\n", result["ranked_entities"])

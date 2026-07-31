@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List
 from dotenv import load_dotenv
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from google import genai
 
+load_dotenv()
 
 GENAI_API_KEY = os.getenv("GENAI_API_KEY")   
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -35,14 +37,20 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 # Load FAISS nutrients database
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# 2. Build absolute path to the vector DB directory
+DB_PATH = PROJECT_ROOT / "datasets" / "vector_db" / "information_enricher_db"
+
+# 3. Load local FAISS store
 nutrients_db = FAISS.load_local(
-    "vector_db/nutrients_db",   # <-- your saved folder
+    str(DB_PATH),
     embeddings,
     allow_dangerous_deserialization=True
 )
 
 def get_nutrient_context(query: str) -> str:
-    docs = nutrient_retriever.get_relevant_documents(query)
+    docs = nutrient_retriever.invoke(query)
 
     if not docs:
         return ""
@@ -168,4 +176,4 @@ def health():
     return {"status": "ok", "message": "Baymax chat backend running"}
 
 if __name__ == "__main__":
-    uvicorn.run("backend:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("backendtemp2:app", host="0.0.0.0", port=8000, reload=False)
