@@ -10,7 +10,7 @@ class VectorDebriefer:
         load_dotenv()
 
         self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-3.5-flash"
+        self.model = "gemini-3.1-flash-lite"
 
         BASE_DIR = Path(__file__).resolve().parent
 

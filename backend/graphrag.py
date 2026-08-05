@@ -14,7 +14,7 @@ class GraphRetriever:
         )
 
         self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-3.5-flash"
+        self.model = "gemini-3.1-flash-lite"
 
         BASE_DIR = Path(__file__).resolve().parent
         prompt_path = (BASE_DIR / os.getenv("GRAPH_RETRIEVAL_PROMPT_PATH")).resolve()
