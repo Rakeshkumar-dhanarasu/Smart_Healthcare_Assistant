@@ -285,15 +285,8 @@ async function sendMessage() {
         const data = await res.json();
         console.log("RAW DATA:", data);
 
-        // ✅ Correct extraction from YOUR backend
-        const botReply = data.response.final_output;
-
-        // Optional: access graph nodes
-        const nodes = data.response.graph_output.nodes;
-        console.log("Graph nodes:", nodes);
-
         // 🤖 Add bot message
-        addMessage(botReply, "baymax");
+        addMessage(data.response, "baymax");
 
     } catch (error) {
         console.error(error);
